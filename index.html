@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Atelier Pixel Art Pro - V30 Precision</title>
+    <title>Atelier Pixel Art Pro - V29 Ultimate</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -52,7 +52,7 @@
             image-rendering: crisp-edges; 
             cursor: crosshair;
             
-            /* GPU Layer */
+            /* GPU Layer pour le conteneur uniquement */
             will-change: transform;
             transform: translateZ(0); 
             backface-visibility: hidden; 
@@ -66,10 +66,17 @@
         .pipette-mode #canvas-wrapper { cursor: crosshair !important; }
 
         #reference-image { 
-            position: absolute; inset: 0; background-size: contain; background-position: center; background-repeat: no-repeat; opacity: 0; pointer-events: none; z-index: 0; transition: opacity 0.2s; will-change: opacity;
+            position: absolute; 
+            inset: 0; 
+            background-size: contain; 
+            background-position: center; 
+            background-repeat: no-repeat; 
+            opacity: 0; 
+            pointer-events: none; 
+            z-index: 0; 
+            transition: opacity 0.2s;
+            will-change: opacity;
         }
-
-        /* --- GRILLE OPTIMISÉE (NOUVELLE MÉTHODE) --- */
         #pixel-grid { 
             position: relative; 
             z-index: 10; 
@@ -77,33 +84,19 @@
             height: 100%; 
             touch-action: none; 
             display: grid;
+            /* Optimisation perf DOM */
             contain: layout style paint; 
         }
-
-        /* La grille est dessinée par le conteneur via un background gradient
-           C'est la clé pour avoir des lignes nettes en haute résolution */
-        #pixel-grid.show-grid {
-            background-size: var(--grid-cell-size) var(--grid-cell-size);
-            background-image:
-                linear-gradient(to right, rgba(0,0,0,0.15) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(0,0,0,0.15) 1px, transparent 1px);
-            /* Décale légèrement pour que la ligne englobe le pixel */
-            background-position: -1px -1px; 
-        }
         
-        .dark #pixel-grid.show-grid {
-            background-image:
-                linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px);
-        }
-
-        /* Les pixels n'ont PLUS de bordures individuelles -> Gain de performance énorme et alignement parfait */
+        /* --- GRILLE & PIXELS --- */
         .pixel { 
-            width: 100%; height: 100%; 
-            background-color: transparent; 
+            width: 100%; height: 100%; background-color: transparent; 
+            /* Suppression de translateZ(0) ici pour éviter le crash GPU sur mobile avec 128x128 */
+            border-right: 0.5px solid rgba(0,0,0,0.1); border-bottom: 0.5px solid rgba(0,0,0,0.1);
             box-sizing: border-box; 
-            /* Pas de border ici ! */
         }
+        .dark .pixel { border-color: rgba(255,255,255,0.15); }
+        .no-grid .pixel { border: none !important; }
 
         /* --- UI STYLES --- */
         .tool-btn { height: 48px; width: 100%; border-radius: 0.75rem; font-size: 1.1rem; background-color: white; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #4b5563; transition: all 0.15s; }
@@ -235,7 +228,7 @@
     <div id="workspace">
         <div id="canvas-wrapper">
             <div id="reference-image"></div>
-            <div id="pixel-grid" class="show-grid"></div>
+            <div id="pixel-grid"></div>
         </div>
     </div>
 
@@ -480,11 +473,7 @@
             pixelGrid.innerHTML = ''; 
             pixelGrid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
             
-            // DEFINITION DYNAMIQUE DE LA GRILLE CSS (BACKGROUND)
-            // On calcule le pourcentage d'une cellule pour le background-size
-            const cellSizePercent = 100 / gridSize;
-            pixelGrid.style.setProperty('--grid-cell-size', `${cellSizePercent}%`);
-
+            // Optimisation avec DocumentFragment pour éviter de figer le navigateur sur les grandes grilles (128x128)
             const fragment = document.createDocumentFragment();
             const totalPixels = gridSize * gridSize;
             
@@ -553,11 +542,7 @@
             const deskGrid = document.getElementById('deskGridBtn');
             if(deskGrid) { if(gridState) { deskGrid.classList.add('bg-primary', 'text-white'); deskGrid.classList.remove('text-gray-600'); } else { deskGrid.classList.remove('bg-primary', 'text-white'); deskGrid.classList.add('text-gray-600'); } }
 
-            // Application de la classe sur le CONTENEUR et non les enfants
-            if(pixelGrid) {
-                if(isGridVisible) pixelGrid.classList.add('show-grid');
-                else pixelGrid.classList.remove('show-grid');
-            }
+            if(pixelGrid) pixelGrid.classList.toggle('no-grid', !isGridVisible);
         }
 
         function toggleGrid() { isGridVisible = !isGridVisible; updateToolUI(); }
@@ -736,6 +721,7 @@
             if(menuCont) menuCont.innerHTML = '';
             
             recentColors.forEach(c => {
+                // Desktop Sidebar (Ne ferme pas)
                 if(deskCont) {
                     const d = document.createElement('div');
                     d.className = `w-6 h-6 rounded-full cursor-pointer border border-gray-200 dark:border-gray-600`;
@@ -743,6 +729,8 @@
                     d.onclick = () => { setAppColor(c); setTool('brush'); };
                     deskCont.appendChild(d);
                 }
+
+                // Menu Modal (Ferme automatiquement)
                 if(menuCont) {
                     const m = document.createElement('div');
                     m.className = `w-6 h-6 rounded-full cursor-pointer border border-gray-200 dark:border-gray-600`;
@@ -750,7 +738,7 @@
                     m.onclick = () => { 
                         setAppColor(c); 
                         setTool('brush'); 
-                        toggleColorMenu(); 
+                        toggleColorMenu(); // AJOUT: Ferme le menu
                     };
                     menuCont.appendChild(m);
                 }
@@ -825,11 +813,14 @@
             updateSatArea(cpHue);
         }
 		
+        // --- LOGIQUE STEP GRILLE PERSONNALISEE ---
         function getSnappedGridSize(rawVal) {
             let v = parseInt(rawVal);
             if (v <= 64) {
+                // Jusqu'à 64, pas de 4 (standard)
                 return Math.round(v / 4) * 4;
             } else {
+                // Au dessus de 64, pas de 16 (80, 96, 112, 128)
                 return Math.round(v / 16) * 16;
             }
         }
@@ -839,6 +830,7 @@
             window.addEventListener('pointermove', handleMove);
             window.addEventListener('pointerup', handleEnd);
 
+            // --- Logique Grid Slider avec Paliers Variables ---
             const handleGridInput = (e, textId) => {
                 const snapped = getSnappedGridSize(e.target.value);
                 updateGridText(snapped, textId);
@@ -850,7 +842,9 @@
             const mobGridInput = document.getElementById('mobGridSize');
             if(mobGridInput) mobGridInput.oninput = (e) => handleGridInput(e, 'mobGridVal');
 
+            // Boutons Apply
             document.getElementById('deskApplySize').onclick = () => {
+                // On récupère la valeur brute et on applique le snap avant de créer
                 const raw = document.getElementById('deskGridSize').value;
                 gridSize = getSnappedGridSize(raw);
                 createGrid();
