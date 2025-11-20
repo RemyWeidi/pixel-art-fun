@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Atelier Pixel Art Pro - V29 Ultimate</title>
+    <title>Atelier Pixel Art Pro - V37 Smart Lasso Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -33,7 +33,8 @@
             overscroll-behavior-y: none; touch-action: none; margin: 0; padding: 0; height: 100vh; overflow: hidden; 
             transition: background-color 0.3s, color 0.3s; 
         }
-        .no-context-menu { -webkit-touch-callout: none; user-select: none; }
+        /* Bloque le menu contextuel partout */
+        body, #workspace { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 
         /* --- WORKSPACE --- */
         #workspace { width: 100%; height: 100vh; background-color: #e5e7eb; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; transition: background-color 0.3s; z-index: 0; }
@@ -43,60 +44,50 @@
             position: relative; 
             background-color: white; 
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            width: min(95vw, 500px); 
-            height: min(95vw, 500px);
             flex-shrink: 0; 
-            
-            /* OPTIMISATIONS RENDU */
             image-rendering: pixelated; 
             image-rendering: crisp-edges; 
             cursor: crosshair;
-            
-            /* GPU Layer pour le conteneur uniquement */
             will-change: transform;
             transform: translateZ(0); 
             backface-visibility: hidden; 
-
-            transition: background-color 0.3s, box-shadow 0.2s; 
+            transition: box-shadow 0.2s;
         }
         .dark #canvas-wrapper { background-color: #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
 
         .cursor-move-mode #canvas-wrapper { cursor: grab !important; }
         .cursor-move-mode #canvas-wrapper:active { cursor: grabbing !important; }
         .pipette-mode #canvas-wrapper { cursor: crosshair !important; }
+        /* Curseur spécifique Lasso */
+        .lasso-mode #canvas-wrapper { cursor: crosshair !important; }
+        .lasso-moving #canvas-wrapper { cursor: move !important; }
 
         #reference-image { 
-            position: absolute; 
-            inset: 0; 
-            background-size: contain; 
-            background-position: center; 
-            background-repeat: no-repeat; 
-            opacity: 0; 
-            pointer-events: none; 
-            z-index: 0; 
-            transition: opacity 0.2s;
-            will-change: opacity;
+            position: absolute; inset: 0; background-size: contain; background-position: center; background-repeat: no-repeat; opacity: 0; pointer-events: none; z-index: 0; transition: opacity 0.2s; will-change: opacity; image-rendering: pixelated;
         }
-        #pixel-grid { 
-            position: relative; 
-            z-index: 10; 
-            width: 100%; 
-            height: 100%; 
-            touch-action: none; 
-            display: grid;
-            /* Optimisation perf DOM */
-            contain: layout style paint; 
+
+        /* --- GRILLE PIXEL PERFECT --- */
+        #pixel-grid { position: relative; z-index: 10; width: 100%; height: 100%; touch-action: none; display: grid; contain: strict; }
+        :root { --grid-color: rgba(0,0,0,0.35); } 
+        .dark { --grid-color: rgba(255,255,255,0.25); }
+        #pixel-grid.show-grid {
+            background-size: var(--grid-cell-px) var(--grid-cell-px);
+            background-position: 0 0;
+            background-image: linear-gradient(to right, var(--grid-color) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+        }
+        .pixel { width: 100%; height: 100%; background-color: transparent; }
+
+        /* --- SELECTION OVERLAY (Cadre de sélection) --- */
+        #selection-overlay {
+            position: absolute; border: 2px dashed #06b6d4; background: rgba(6, 182, 212, 0.15); pointer-events: none; display: none; z-index: 30; box-shadow: 0 0 0 1px white;
         }
         
-        /* --- GRILLE & PIXELS --- */
-        .pixel { 
-            width: 100%; height: 100%; background-color: transparent; 
-            /* Suppression de translateZ(0) ici pour éviter le crash GPU sur mobile avec 128x128 */
-            border-right: 0.5px solid rgba(0,0,0,0.1); border-bottom: 0.5px solid rgba(0,0,0,0.1);
-            box-sizing: border-box; 
+        /* Feedback visuel pour les pixels en cours de déplacement */
+        .pixel.preview-pixel {
+            opacity: 0.8;
+            box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
+            z-index: 25;
         }
-        .dark .pixel { border-color: rgba(255,255,255,0.15); }
-        .no-grid .pixel { border: none !important; }
 
         /* --- UI STYLES --- */
         .tool-btn { height: 48px; width: 100%; border-radius: 0.75rem; font-size: 1.1rem; background-color: white; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #4b5563; transition: all 0.15s; }
@@ -106,12 +97,29 @@
         .tool-active { background-color: #e0f2fe !important; border-color: #06b6d4 !important; color: #06b6d4 !important; border-width: 2px !important; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(6, 182, 212, 0.2); }
         .dark .tool-active { background-color: #164e63 !important; border-color: #22d3ee !important; color: #22d3ee !important; }
 
+        /* Icon Only Buttons (Mirror/Grid/Lasso on Desktop) */
+        .icon-btn-sm { height: 40px; width: 100%; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; border: 1px solid #e5e7eb; color: #64748b; background: white; transition: all 0.15s; }
+        .dark .icon-btn-sm { background: #1e293b; border-color: #334155; color: #94a3b8; }
+        .icon-btn-sm:hover { background: #f1f5f9; }
+        .dark .icon-btn-sm:hover { background: #334155; color: white; }
+        .icon-btn-sm.active { background-color: #06b6d4; border-color: #06b6d4; color: white; }
+
         .floating-actions { position: fixed; top: 16px; right: 16px; z-index: 50; display: flex; gap: 8px; }
         .float-btn { width: 44px; height: 44px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); color: #4b5563; font-size: 18px; transition: background 0.3s; }
         .dark .float-btn { background: #1e293b; color: #e2e8f0; }
         .float-btn:active { transform: scale(0.95); background: #f3f4f6; }
         .dark .float-btn:active { background: #334155; }
         .float-btn:disabled { opacity: 0.5; color: #9ca3af; }
+
+        /* --- LASSO MODAL --- */
+        .lasso-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 16px; border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25); z-index: 100;
+            display: none; flex-direction: column; gap: 10px; min-width: 220px;
+            border: 1px solid #e2e8f0;
+        }
+        .dark .lasso-modal { background: #1e293b; border-color: #334155; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
 
         /* --- MOBILE TOOLBAR --- */
         #swipe-toolbar {
@@ -214,7 +222,7 @@
         }
     </style>
 </head>
-<body class="bg-soft-bg dark:bg-dark-bg text-text-dark dark:text-slate-200 no-context-menu transition-colors duration-300">
+<body class="bg-soft-bg dark:bg-dark-bg text-text-dark dark:text-slate-200 no-context-menu transition-colors duration-300" oncontextmenu="return false;">
 
     <div id="toast-notification"><i class="fa-solid fa-circle-info mr-2"></i><span id="toast-text">Info</span></div>
 
@@ -228,8 +236,29 @@
     <div id="workspace">
         <div id="canvas-wrapper">
             <div id="reference-image"></div>
-            <div id="pixel-grid"></div>
+            <div id="pixel-grid" class="show-grid"></div>
+            <div id="selection-overlay"></div>
         </div>
+
+        <div id="lasso-choice-modal" class="lasso-modal">
+            <div class="text-center text-sm font-bold text-gray-500 uppercase mb-1 tracking-wider">Sélection</div>
+            <button onclick="setSelectionAction('move')" class="w-full py-3 bg-gray-100 dark:bg-slate-700 rounded-xl font-bold text-gray-700 dark:text-slate-200 hover:bg-gray-200 transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrows-up-down-left-right"></i> Déplacer
+            </button>
+            <button onclick="setSelectionAction('copy')" class="w-full py-3 bg-gray-100 dark:bg-slate-700 rounded-xl font-bold text-gray-700 dark:text-slate-200 hover:bg-gray-200 transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-copy"></i> Copier
+            </button>
+            <button onclick="cancelSelection()" class="w-full py-2 text-red-500 font-bold text-sm hover:bg-red-50 dark:hover:bg-transparent rounded-lg transition">Annuler</button>
+        </div>
+    </div>
+
+    <div id="lasso-mobile-controls" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4 z-[200] hidden">
+        <button onclick="confirmSelectionAction()" class="w-14 h-14 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center text-xl hover:scale-110 transition border-2 border-white">
+            <i class="fa-solid fa-check"></i>
+        </button>
+        <button onclick="cancelSelection()" class="w-14 h-14 bg-red-500 text-white rounded-full shadow-lg flex items-center justify-center text-xl hover:scale-110 transition border-2 border-white">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
     </div>
 
     <div id="swipe-toolbar" class="mobile-flex">
@@ -243,14 +272,20 @@
                 <button id="mobColorBtn" class="btn-xl border-4 border-gray-100 dark:border-slate-600 flex-shrink-0 transition-colors" style="background-color: #06b6d4;" onclick="toggleColorMenu()"></button>
             </div>
             <div class="toolbar-slide">
+            
                 <button id="mobLine" class="btn-xl" onclick="setTool('line')"><i class="fa-solid fa-slash"></i></button>
                 <button id="mobRect" class="btn-xl" onclick="setTool('rect')"><i class="fa-regular fa-square"></i></button>
                 <button id="mobCircle" class="btn-xl" onclick="setTool('circle')"><i class="fa-regular fa-circle"></i></button>
                 <button id="mobSymBtn" class="btn-xl" onclick="toggleSymmetry()"><i class="fa-solid fa-right-left"></i></button>
-                <button id="mobMagicWand" class="btn-xl" onclick="setTool('magicWand')"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+				<button id="mobLasso" class="btn-xl" onclick="setTool('lasso')">
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+       <path d="M12 20c-4.418 0 -8 -3.582 -8 -8s3.582 -8 8 -8c4.418 0 8 3.582 8 8v1c0 1.657 -1.343 3 -3 3h-3l-5 5"></path>
+    </svg>
+</button>
                 <button id="mobPipette" class="btn-xl" onclick="setTool('pipette')"><i class="fa-solid fa-eye-dropper"></i></button>
             </div>
             <div class="toolbar-slide">
+                <button id="mobMagicWand" class="btn-xl" onclick="setTool('magicWand')"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
                 <button class="btn-xl" onclick="moveCanvas(0, -1)"><i class="fa-solid fa-arrow-up"></i></button>
                 <button class="btn-xl" onclick="moveCanvas(0, 1)"><i class="fa-solid fa-arrow-down"></i></button>
                 <button class="btn-xl" onclick="moveCanvas(-1, 0)"><i class="fa-solid fa-arrow-left"></i></button>
@@ -370,20 +405,32 @@
             <button id="deskCircle" class="tool-btn" onclick="setTool('circle')" title="Cercle"><i class="fa-regular fa-circle"></i></button>
             <button id="deskMagicWand" class="tool-btn" onclick="setTool('magicWand')" title="Baguette"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
         </div>
+        
+        <div class="grid grid-cols-3 gap-2 mb-4">
+             <button id="deskLasso" class="icon-btn-sm" onclick="setTool('lasso')" title="Sélection Lasso">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+       <path d="M12 20c-4.418 0 -8 -3.582 -8 -8s3.582 -8 8 -8c4.418 0 8 3.582 8 8v1c0 1.657 -1.343 3 -3 3h-3l-5 5"></path>
+    </svg>
+</button>
+             <button id="deskSymBtn" class="icon-btn-sm" onclick="toggleSymmetry()" title="Miroir"><i class="fa-solid fa-right-left"></i></button>
+             <button id="deskGridBtn" class="icon-btn-sm active bg-primary text-white" onclick="toggleGrid()" title="Grille"><i class="fa-solid fa-border-all"></i></button>
+        </div>
+
         <div class="mb-6 bg-gray-50 dark:bg-slate-800 p-3 rounded-xl border border-gray-100 dark:border-slate-700">
              <div class="flex justify-between text-xs font-bold text-gray-500 dark:text-slate-400 mb-2"><span>Taille Pinceau</span><span id="deskBrushVal" class="text-primary">1</span></div>
              <input type="range" id="deskBrushSize" min="1" max="4" value="1" class="w-full h-2 bg-gray-200 dark:bg-slate-600 rounded-lg accent-primary cursor-pointer">
         </div>
-        <div class="flex gap-2 mb-4">
-            <button id="deskSymBtn" class="flex-1 py-2 border dark:border-slate-600 rounded-lg text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition" onclick="toggleSymmetry()"><i class="fa-solid fa-right-left"></i> Miroir</button>
-            <button id="deskGridBtn" class="flex-1 py-2 border dark:border-slate-600 rounded-lg text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition" onclick="toggleGrid()"><i class="fa-solid fa-border-all"></i> Grille</button>
-        </div>
+
         <div class="bg-gray-50 dark:bg-slate-800 p-3 rounded-xl border border-gray-100 dark:border-slate-700 mb-6">
-            <h3 class="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase mb-2 text-center">Déplacer</h3>
-            <div class="flex justify-center gap-2"><button onclick="moveCanvas(0, -1)" class="w-8 h-8 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-up"></i></button></div>
-            <div class="flex justify-center gap-8 my-1"><button onclick="moveCanvas(-1, 0)" class="w-8 h-8 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-left"></i></button><button onclick="moveCanvas(1, 0)" class="w-8 h-8 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-right"></i></button></div>
-            <div class="flex justify-center gap-2"><button onclick="moveCanvas(0, 1)" class="w-8 h-8 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-down"></i></button></div>
+            <h3 class="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase mb-2 text-center">Déplacer Canevas</h3>
+            <div class="flex justify-between gap-2">
+                <button onclick="moveCanvas(-1, 0)" class="flex-1 h-10 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-left"></i></button>
+                <button onclick="moveCanvas(0, -1)" class="flex-1 h-10 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-up"></i></button>
+                <button onclick="moveCanvas(0, 1)" class="flex-1 h-10 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-down"></i></button>
+                <button onclick="moveCanvas(1, 0)" class="flex-1 h-10 bg-white dark:bg-slate-700 dark:text-slate-200 rounded shadow-sm hover:bg-gray-100"><i class="fa-solid fa-arrow-right"></i></button>
+            </div>
         </div>
+
         <div class="space-y-3 pt-4 border-t border-gray-100 dark:border-slate-700">
              <div class="bg-blue-50 dark:bg-slate-800 p-3 rounded-xl border border-blue-100 dark:border-slate-700">
                  <div class="flex gap-2 mb-2">
@@ -438,6 +485,17 @@
         let toastTimeout;
         let isDrawing = false;
         let startPixel = null;
+        let cellSizePx = 0;
+
+        // Variables pour le Lasso amélioré
+        let lassoStart = null;
+        let lassoSelection = []; 
+        let isLassoActive = false;
+        let lassoAction = null; // 'move' ou 'copy'
+        let lassoOffsetX = 0;
+        let lassoOffsetY = 0;
+        let lassoWidth = 0;
+        let lassoHeight = 0;
 
         const BASE_COLORS = [
             { name: 'Jaune', h: 50, s: 100, v: 100, hex: '#FFD700' },
@@ -471,12 +529,17 @@
         // --- 3. CORE FUNCTIONS ---
         function createGrid() {
             pixelGrid.innerHTML = ''; 
+            const maxScreenW = Math.min(window.innerWidth * 0.95, 500);
+            let rawCellSize = Math.floor(maxScreenW / gridSize);
+            if (rawCellSize < 1) rawCellSize = 1;
+            const exactWidth = rawCellSize * gridSize;
+            cellSizePx = rawCellSize;
+            canvasWrapper.style.width = `${exactWidth}px`;
+            canvasWrapper.style.height = `${exactWidth}px`;
             pixelGrid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
-            
-            // Optimisation avec DocumentFragment pour éviter de figer le navigateur sur les grandes grilles (128x128)
+            pixelGrid.style.setProperty('--grid-cell-px', `${cellSizePx}px`);
             const fragment = document.createDocumentFragment();
             const totalPixels = gridSize * gridSize;
-            
             for (let i = 0; i < totalPixels; i++) {
                 const div = document.createElement('div');
                 div.className = 'pixel';
@@ -484,9 +547,9 @@
                 fragment.appendChild(div);
             }
             pixelGrid.appendChild(fragment);
-
             history = []; historyIndex = -1;
             saveState();
+            cancelSelection(); 
         }
 
         function saveState() {
@@ -514,18 +577,33 @@
 
         function setTool(t) {
             currentTool = t; isTransparent = (t === 'eraser');
-            if(currentTool === 'hand') document.body.classList.add('cursor-move-mode'); else document.body.classList.remove('cursor-move-mode');
-            if(currentTool === 'pipette') { document.body.classList.add('pipette-mode'); showToast("Pipette : Touchez une couleur"); } else { document.body.classList.remove('pipette-mode'); }
+            document.body.classList.remove('cursor-move-mode', 'pipette-mode', 'lasso-mode', 'lasso-moving');
+            
+            if(currentTool === 'hand') document.body.classList.add('cursor-move-mode'); 
+            else if(currentTool === 'pipette') { document.body.classList.add('pipette-mode'); showToast("Pipette : Touchez une couleur"); }
+            else if(currentTool === 'lasso') { document.body.classList.add('lasso-mode'); showToast("Lasso : Encadrez la zone"); }
+            
             updateToolUI();
+            if (t !== 'lasso' && isLassoActive) cancelSelection();
         }
 
         function updateToolUI() {
             document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('tool-active'));
-            const deskBtn = document.getElementById(`desk${capitalize(currentTool)}`); 
-            if(deskBtn) deskBtn.classList.add('tool-active');
+            document.querySelectorAll('.icon-btn-sm').forEach(b => {
+                if(b.id !== 'deskGridBtn' && b.id !== 'deskSymBtn') b.classList.remove('active'); 
+            });
 
-            const mobToolIds = ['mobBrush', 'mobFill', 'mobEraser', 'mobHand', 'mobPipette', 'mobMagicWand', 'mobLine', 'mobRect', 'mobCircle'];
-            mobToolIds.forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove('active'); });
+            const deskBtn = document.getElementById(`desk${capitalize(currentTool)}`); 
+            if(deskBtn) {
+                if (deskBtn.classList.contains('icon-btn-sm')) deskBtn.classList.add('active');
+                else deskBtn.classList.add('tool-active');
+            }
+
+            const mobToolIds = ['mobBrush', 'mobFill', 'mobEraser', 'mobHand', 'mobPipette', 'mobMagicWand', 'mobLine', 'mobRect', 'mobCircle', 'mobLasso'];
+            mobToolIds.forEach(id => { 
+                const el = document.getElementById(id); 
+                if(el) el.classList.remove('active'); 
+            });
             
             const mobBtn = document.getElementById(`mob${capitalize(currentTool)}`);
             if(mobBtn) mobBtn.classList.add('active');
@@ -534,15 +612,18 @@
             const mobSym = document.getElementById('mobSymBtn');
             if(mobSym) { if(symState) mobSym.classList.add('active'); else mobSym.classList.remove('active'); }
             const deskSym = document.getElementById('deskSymBtn');
-            if(deskSym) { if(symState) { deskSym.classList.add('bg-primary', 'text-white'); deskSym.classList.remove('text-gray-600'); } else { deskSym.classList.remove('bg-primary', 'text-white'); deskSym.classList.add('text-gray-600'); } }
+            if(deskSym) { if(symState) deskSym.classList.add('active'); else deskSym.classList.remove('active'); }
 
             const gridState = isGridVisible;
             const mobGrid = document.getElementById('mobGridBtn');
             if(mobGrid) { if(gridState) { mobGrid.classList.add('bg-primary', 'text-white'); mobGrid.classList.remove('bg-gray-200'); } else { mobGrid.classList.remove('bg-primary', 'text-white'); mobGrid.classList.add('bg-gray-200'); } }
             const deskGrid = document.getElementById('deskGridBtn');
-            if(deskGrid) { if(gridState) { deskGrid.classList.add('bg-primary', 'text-white'); deskGrid.classList.remove('text-gray-600'); } else { deskGrid.classList.remove('bg-primary', 'text-white'); deskGrid.classList.add('text-gray-600'); } }
+            if(deskGrid) { if(gridState) { deskGrid.classList.add('active'); } else { deskGrid.classList.remove('active'); } }
 
-            if(pixelGrid) pixelGrid.classList.toggle('no-grid', !isGridVisible);
+            if(pixelGrid) {
+                if(isGridVisible) pixelGrid.classList.add('show-grid');
+                else pixelGrid.classList.remove('show-grid');
+            }
         }
 
         function toggleGrid() { isGridVisible = !isGridVisible; updateToolUI(); }
@@ -556,7 +637,6 @@
             localStorage.setItem('pixelArtDarkMode', isDarkMode); updateToolUI();
         }
 
-        // --- DRAWING LOGIC ---
         function getPointerTarget(e) {
              const rect = pixelGrid.getBoundingClientRect();
              const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
@@ -565,6 +645,363 @@
              const x = Math.floor((clientX - rect.left) / (rect.width / gridSize));
              const y = Math.floor((clientY - rect.top) / (rect.height / gridSize));
              return { x, y };
+        }
+
+        // --- LOGIQUE LASSO & SELECTION AMÉLIORÉE ---
+        function updateSelectionOverlay(start, end) {
+            const overlay = document.getElementById('selection-overlay');
+            const x1 = Math.min(start.x, end.x);
+            const y1 = Math.min(start.y, end.y);
+            const x2 = Math.max(start.x, end.x);
+            const y2 = Math.max(start.y, end.y);
+            
+            const left = x1 * cellSizePx;
+            const top = y1 * cellSizePx;
+            const width = (x2 - x1 + 1) * cellSizePx;
+            const height = (y2 - y1 + 1) * cellSizePx;
+
+            overlay.style.left = `${left}px`;
+            overlay.style.top = `${top}px`;
+            overlay.style.width = `${width}px`;
+            overlay.style.height = `${height}px`;
+            overlay.style.display = 'block';
+        }
+
+        function finishLassoSelection(endPixel) {
+            if (!lassoStart) return;
+            
+            let x1 = Math.min(lassoStart.x, endPixel.x);
+            let y1 = Math.min(lassoStart.y, endPixel.y);
+            let x2 = Math.max(lassoStart.x, endPixel.x);
+            let y2 = Math.max(lassoStart.y, endPixel.y);
+
+            // 1. Analyse du contenu brut et détection du fond
+            let rawPixels = [];
+            let borderColors = {};
+            let perimeterSize = 0;
+
+            for(let y=y1; y<=y2; y++) {
+                for(let x=x1; x<=x2; x++) {
+                    const p = getPixel(x, y);
+                    const col = p.style.backgroundColor;
+                    const isBorder = (x === x1 || x === x2 || y === y1 || y === y2);
+                    
+                    if (isBorder) {
+                        perimeterSize++;
+                        if (col && col !== 'transparent' && col !== 'rgba(0, 0, 0, 0)') {
+                            borderColors[col] = (borderColors[col] || 0) + 1;
+                        }
+                    }
+                    
+                    if (col && col !== 'transparent' && col !== 'rgba(0, 0, 0, 0)') {
+                        rawPixels.push({x, y, color: col});
+                    }
+                }
+            }
+
+            if (rawPixels.length === 0) {
+                showToast("Zone vide !");
+                cancelSelection();
+                return;
+            }
+
+            // 2. Détection "Smart Background"
+            // Si une couleur compose plus de 75% du bord, on la considère comme fond
+            let ignoredColor = null;
+            for (let c in borderColors) {
+                if (borderColors[c] > perimeterSize * 0.75) {
+                    ignoredColor = c;
+                    break;
+                }
+            }
+
+            // 3. Filtrage et calcul de la Bounding Box réelle (Crop)
+            lassoSelection = [];
+            let minX = gridSize, minY = gridSize, maxX = -1, maxY = -1;
+
+            rawPixels.forEach(p => {
+                // On ignore si c'est la couleur de fond détectée
+                if (p.color === ignoredColor) return;
+
+                // Update bounds
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+
+                lassoSelection.push({
+                    absX: p.x,
+                    absY: p.y,
+                    color: p.color
+                });
+            });
+
+            if (lassoSelection.length === 0) {
+                showToast("Seul le fond a été sélectionné.");
+                cancelSelection();
+                return;
+            }
+
+            // 4. Normalisation par rapport à la nouvelle Bounding Box
+            lassoWidth = maxX - minX + 1;
+            lassoHeight = maxY - minY + 1;
+            lassoOffsetX = Math.floor(lassoWidth / 2);
+            lassoOffsetY = Math.floor(lassoHeight / 2);
+
+            // On réécrit les coordonnées en relatif par rapport au coin haut-gauche de la bbox
+            lassoSelection = lassoSelection.map(p => ({
+                relX: p.absX - minX,
+                relY: p.absY - minY,
+                color: p.color,
+                origX: p.absX, // Important pour le mode 'move' (effacement)
+                origY: p.absY
+            }));
+
+            // Afficher menu choix
+            const modal = document.getElementById('lasso-choice-modal');
+            modal.style.display = 'flex';
+            isLassoActive = true;
+        }
+
+        function setSelectionAction(action) {
+            lassoAction = action; 
+            document.getElementById('lasso-choice-modal').style.display = 'none';
+            document.body.classList.add('lasso-moving');
+
+            // Afficher contrôles mobile
+            if(window.innerWidth <= 1024) {
+                 document.getElementById('lasso-mobile-controls').classList.remove('hidden');
+                 document.getElementById('swipe-toolbar').classList.add('hidden');
+                 document.getElementById('floating-hamburger').classList.add('hidden');
+            }
+
+            if (action === 'move') {
+                // Effacer les originaux immédiatement
+                lassoSelection.forEach(p => {
+                    const pixel = getPixel(p.origX, p.origY);
+                    if(pixel) pixel.style.backgroundColor = 'transparent';
+                });
+                showToast("Déplacez. Cliquez/Tap pour poser.");
+            } else {
+                showToast("Copiez. Cliquez/Tap pour tamponner.");
+            }
+        }
+
+        function previewLassoAction(targetPixel) {
+            if (!isLassoActive || !lassoAction) return;
+
+            // Nettoyage propre des previews
+            document.querySelectorAll('.pixel.preview-pixel').forEach(p => {
+                p.style.backgroundColor = p.dataset.origColor || 'transparent';
+                p.classList.remove('preview-pixel');
+                delete p.dataset.origColor;
+            });
+
+            // Dessin du fantôme
+            lassoSelection.forEach(item => {
+                // Calcul position centrée sur le curseur
+                const targetX = targetPixel.x + item.relX - lassoOffsetX;
+                const targetY = targetPixel.y + item.relY - lassoOffsetY;
+                
+                if (targetX >= 0 && targetX < gridSize && targetY >= 0 && targetY < gridSize) {
+                    const p = getPixel(targetX, targetY);
+                    if (!p.dataset.origColor) {
+                        p.dataset.origColor = p.style.backgroundColor;
+                        p.classList.add('preview-pixel');
+                    }
+                    p.style.backgroundColor = item.color;
+                }
+            });
+        }
+
+        function stampSelection(targetPixel) {
+            if (!isLassoActive || !lassoAction) return;
+
+            // Applique réellement les pixels (Tampon)
+            let modified = false;
+            lassoSelection.forEach(item => {
+                const targetX = targetPixel.x + item.relX - lassoOffsetX;
+                const targetY = targetPixel.y + item.relY - lassoOffsetY;
+                if (targetX >= 0 && targetX < gridSize && targetY >= 0 && targetY < gridSize) {
+                    const p = getPixel(targetX, targetY);
+                    // Supprimer flags preview s'ils sont là
+                    if(p.classList.contains('preview-pixel')) {
+                        p.classList.remove('preview-pixel');
+                        delete p.dataset.origColor; 
+                    }
+                    p.style.backgroundColor = item.color;
+                    modified = true;
+                }
+            });
+
+            if (modified) {
+                saveState(); // Sauvegarde chaque tampon comme une étape
+                // Réapplique le preview par dessus pour ne pas perdre le visuel du curseur
+                previewLassoAction(targetPixel);
+            }
+        }
+
+        function confirmSelectionAction() {
+            // Nettoyage final
+            document.querySelectorAll('.pixel.preview-pixel').forEach(p => {
+                p.classList.remove('preview-pixel');
+                delete p.dataset.origColor;
+            });
+            
+            // Reset complet
+            lassoStart = null;
+            lassoSelection = [];
+            isLassoActive = false;
+            lassoAction = null;
+            document.getElementById('selection-overlay').style.display = 'none';
+            document.body.classList.remove('lasso-moving');
+            
+            // UI Reset
+            document.getElementById('lasso-mobile-controls').classList.add('hidden');
+            if(window.innerWidth <= 1024) {
+                document.getElementById('swipe-toolbar').classList.remove('hidden');
+                document.getElementById('floating-hamburger').classList.remove('hidden');
+            }
+            
+            showToast("Terminé !");
+        }
+
+        function cancelSelection() {
+            if (lassoAction === 'move' && isLassoActive) {
+                 // Si on était en move, les originaux ont été effacés, il faut restaurer
+                 restoreState(history[historyIndex]); 
+            }
+            
+            lassoStart = null;
+            lassoSelection = [];
+            isLassoActive = false;
+            lassoAction = null;
+            document.getElementById('selection-overlay').style.display = 'none';
+            document.getElementById('lasso-choice-modal').style.display = 'none';
+            document.body.classList.remove('lasso-moving');
+            
+            document.querySelectorAll('.pixel.preview-pixel').forEach(p => {
+                p.style.backgroundColor = p.dataset.origColor || 'transparent';
+                p.classList.remove('preview-pixel');
+                delete p.dataset.origColor;
+            });
+
+            // UI Reset
+            document.getElementById('lasso-mobile-controls').classList.add('hidden');
+            if(window.innerWidth <= 1024) {
+                document.getElementById('swipe-toolbar').classList.remove('hidden');
+                document.getElementById('floating-hamburger').classList.remove('hidden');
+            }
+        }
+
+        function handleStart(e) {
+            if(e.target.closest('.zoom-controls') || e.target.closest('.floating-actions') || e.target.closest('.lasso-modal') || e.target.closest('#lasso-mobile-controls')) return;
+
+            // --- CLIC DROIT pour VALIDER ---
+            if (e.button === 2) {
+                if (isLassoActive && lassoAction) {
+                    confirmSelectionAction();
+                    return;
+                }
+            }
+
+            // GESTION LASSO
+            if (currentTool === 'lasso') {
+                const pt = getPointerTarget(e);
+                
+                // Mode Action (Move/Copy)
+                if (isLassoActive && lassoAction) {
+                    if (pt) {
+                        // Clic Gauche ou Tap = TAMPONNER
+                        stampSelection(pt);
+                    }
+                    return; 
+                }
+
+                // Nouvelle sélection
+                if (!isLassoActive && pt) {
+                    lassoStart = pt;
+                    isDrawing = true;
+                    document.getElementById('selection-overlay').style.display = 'none';
+                    return;
+                }
+                return;
+            }
+
+            // GESTION AUTRES OUTILS (Pipette, etc)
+            if (currentTool === 'pipette') {
+                e.preventDefault(); 
+                let foundColor = null;
+                const pt = getPointerTarget(e);
+                if(pt) {
+                    const p = getPixel(pt.x, pt.y);
+                    if(p && p.style.backgroundColor && p.style.backgroundColor !== 'transparent' && p.style.backgroundColor !== 'rgba(0, 0, 0, 0)') { 
+                        foundColor = p.style.backgroundColor; 
+                    }
+                }
+                if (!foundColor) {
+                    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                    try { const imgColor = getColorFromImage(clientX, clientY); if (imgColor) foundColor = imgColor; } catch(err) { console.log(err); }
+                }
+                if (foundColor) { setAppColor(foundColor); showToast("Couleur copiée !"); } else { showToast("Pinceau activé"); }
+                setTool('brush'); 
+                return; 
+            }
+
+            if(currentTool === 'hand') return;
+            const pt = getPointerTarget(e);
+            if(!pt) return;
+
+            e.preventDefault(); 
+            isDrawing = true; 
+            startPixel = pt;
+
+            // Gomme sur clic droit
+            if(e.button === 2 || (e.buttons === 2)) { drawAction(pt, true); return; }
+
+            if (currentTool === 'fill') { fillTool(startPixel.x, startPixel.y, isTransparent ? 'transparent' : currentColor); saveState(); isDrawing = false; } 
+            else if (currentTool === 'magicWand') { magicWandAction(startPixel.x, startPixel.y); saveState(); isDrawing = false; } 
+            else if (['brush', 'eraser'].includes(currentTool)) { drawAction(pt); }
+        }
+
+        function handleMove(e) {
+            const pt = getPointerTarget(e);
+            
+            // LASSO LOGIC
+            if (currentTool === 'lasso') {
+                if (!pt) return;
+
+                if (isDrawing && lassoStart) {
+                    updateSelectionOverlay(lassoStart, pt);
+                    return;
+                }
+
+                if (isLassoActive && lassoAction) {
+                    // Le fantôme suit la souris/doigt
+                    previewLassoAction(pt);
+                    return;
+                }
+            }
+
+            if(!isDrawing) return;
+            if(!pt) return;
+            if(e.buttons === 2) { drawAction(pt, true); return; }
+            if(['brush', 'eraser'].includes(currentTool)) { drawAction(pt); } 
+            else if (['line', 'rect', 'circle'].includes(currentTool)) { restoreState(history[historyIndex]); drawShape(startPixel, pt, currentTool); }
+        }
+
+        function handleEnd(e) { 
+            if (currentTool === 'lasso' && isDrawing) {
+                isDrawing = false;
+                const pt = getPointerTarget(e);
+                if (pt && lassoStart) {
+                    finishLassoSelection(pt);
+                }
+                lassoStart = null; 
+            }
+            
+            if(isDrawing) { saveState(); isDrawing = false; startPixel = null; } 
         }
 
         function getColorFromImage(clientX, clientY) {
@@ -587,58 +1024,6 @@
             if (p[3] === 0) return null;
             return "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1).toUpperCase();
         }
-
-        function handleStart(e) {
-            if(e.target.closest('.zoom-controls') || e.target.closest('.floating-actions')) return;
-            
-            if (currentTool === 'pipette') {
-                e.preventDefault(); 
-                let foundColor = null;
-                const pt = getPointerTarget(e);
-                if(pt) {
-                    const p = getPixel(pt.x, pt.y);
-                    if(p && p.style.backgroundColor && p.style.backgroundColor !== 'transparent' && p.style.backgroundColor !== 'rgba(0, 0, 0, 0)' && p.style.backgroundColor !== '') { 
-                        foundColor = p.style.backgroundColor; 
-                    }
-                }
-                if (!foundColor) {
-                    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-                    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-                    try {
-                        const imgColor = getColorFromImage(clientX, clientY);
-                        if (imgColor) foundColor = imgColor;
-                    } catch(err) { console.log(err); }
-                }
-                if (foundColor) { setAppColor(foundColor); showToast("Couleur copiée !"); } else { showToast("Pinceau activé"); }
-                setTool('brush'); 
-                return; 
-            }
-
-            if(currentTool === 'hand') return;
-            const pt = getPointerTarget(e);
-            if(!pt) return;
-
-            e.preventDefault(); 
-            isDrawing = true; 
-            startPixel = pt;
-
-            if(e.button === 2 || (e.buttons === 2)) { drawAction(pt, true); return; }
-
-            if (currentTool === 'fill') { fillTool(startPixel.x, startPixel.y, isTransparent ? 'transparent' : currentColor); saveState(); isDrawing = false; } 
-            else if (currentTool === 'magicWand') { magicWandAction(startPixel.x, startPixel.y); saveState(); isDrawing = false; } 
-            else if (['brush', 'eraser'].includes(currentTool)) { drawAction(pt); }
-        }
-
-        function handleMove(e) {
-            if(!isDrawing) return;
-            const pt = getPointerTarget(e);
-            if(!pt) return;
-            if(e.buttons === 2) { drawAction(pt, true); return; }
-            if(['brush', 'eraser'].includes(currentTool)) { drawAction(pt); } 
-            else if (['line', 'rect', 'circle'].includes(currentTool)) { restoreState(history[historyIndex]); drawShape(startPixel, pt, currentTool); }
-        }
-
-        function handleEnd() { if(isDrawing) { saveState(); isDrawing = false; startPixel = null; } }
 
         function paintPixel(x, y, color) {
             let size = brushSize; let offset = Math.floor((size - 1) / 2);
@@ -716,12 +1101,9 @@
         function updateRecentColorsUI() { 
             const deskCont = document.getElementById('deskRecentColors');
             const menuCont = document.getElementById('menuRecentColors');
-            
             if(deskCont) deskCont.innerHTML = '';
             if(menuCont) menuCont.innerHTML = '';
-            
             recentColors.forEach(c => {
-                // Desktop Sidebar (Ne ferme pas)
                 if(deskCont) {
                     const d = document.createElement('div');
                     d.className = `w-6 h-6 rounded-full cursor-pointer border border-gray-200 dark:border-gray-600`;
@@ -729,17 +1111,11 @@
                     d.onclick = () => { setAppColor(c); setTool('brush'); };
                     deskCont.appendChild(d);
                 }
-
-                // Menu Modal (Ferme automatiquement)
                 if(menuCont) {
                     const m = document.createElement('div');
                     m.className = `w-6 h-6 rounded-full cursor-pointer border border-gray-200 dark:border-gray-600`;
                     m.style.backgroundColor = c;
-                    m.onclick = () => { 
-                        setAppColor(c); 
-                        setTool('brush'); 
-                        toggleColorMenu(); // AJOUT: Ferme le menu
-                    };
+                    m.onclick = () => { setAppColor(c); setTool('brush'); toggleColorMenu(); };
                     menuCont.appendChild(m);
                 }
             });
@@ -813,14 +1189,11 @@
             updateSatArea(cpHue);
         }
 		
-        // --- LOGIQUE STEP GRILLE PERSONNALISEE ---
         function getSnappedGridSize(rawVal) {
             let v = parseInt(rawVal);
             if (v <= 64) {
-                // Jusqu'à 64, pas de 4 (standard)
                 return Math.round(v / 4) * 4;
             } else {
-                // Au dessus de 64, pas de 16 (80, 96, 112, 128)
                 return Math.round(v / 16) * 16;
             }
         }
@@ -829,8 +1202,14 @@
             canvasWrapper.addEventListener('pointerdown', handleStart);
             window.addEventListener('pointermove', handleMove);
             window.addEventListener('pointerup', handleEnd);
+            
+            // GESTION DOUBLE CLIC POUR VALIDER LASSO
+            canvasWrapper.addEventListener('dblclick', (e) => {
+                if (isLassoActive && lassoAction) {
+                    confirmSelectionAction();
+                }
+            });
 
-            // --- Logique Grid Slider avec Paliers Variables ---
             const handleGridInput = (e, textId) => {
                 const snapped = getSnappedGridSize(e.target.value);
                 updateGridText(snapped, textId);
@@ -842,9 +1221,7 @@
             const mobGridInput = document.getElementById('mobGridSize');
             if(mobGridInput) mobGridInput.oninput = (e) => handleGridInput(e, 'mobGridVal');
 
-            // Boutons Apply
             document.getElementById('deskApplySize').onclick = () => {
-                // On récupère la valeur brute et on applique le snap avant de créer
                 const raw = document.getElementById('deskGridSize').value;
                 gridSize = getSnappedGridSize(raw);
                 createGrid();
@@ -890,9 +1267,12 @@
                     case 'e': setTool('eraser'); break;
                     case 'f': setTool('fill'); break; 
                     case 'p': setTool('pipette'); break;
+                    case 'l': setTool('lasso'); break;
                     case 'g': toggleGrid(); break;
                     case 'm': toggleSymmetry(); break; 
                     case 'h': setTool('hand'); break;
+                    case 'enter': if(isLassoActive) confirmSelectionAction(); break;
+                    case 'escape': if(isLassoActive) cancelSelection(); break;
                 }
             });
         }		
@@ -911,9 +1291,12 @@
             initCustomColorPicker(); 
             updateRecentColorsUI();
             setupSwipe();
+            window.addEventListener('resize', createGrid);
         };
         
         window.setTool = setTool; window.toggleGrid = toggleGrid; window.toggleSymmetry = toggleSymmetry; window.toggleColorMenu = toggleColorMenu; window.toggleMobileMenu = toggleMobileMenu; window.closeMobileMenu = closeMobileMenu; window.undo = undo; window.redo = redo; window.createGrid = createGrid; window.toggleImageVisibility = toggleImageVisibility; window.removeImage = removeImage; window.pixeliseImage = pixeliseImage; window.exportCanvas = exportCanvas; window.showBaseColors = showBaseColors; window.showManualPicker = showManualPicker; window.selectBaseColor = selectBaseColor; window.pickColor = pickColor; window.openColorModal = openColorModal; window.updateSatSlider = updateSatSlider; window.updateValSlider = updateValSlider; window.toggleDarkMode = toggleDarkMode; window.moveCanvas = moveCanvas; window.setRefOpacity = setRefOpacity;
+        // LASSO EXPORTS
+        window.setSelectionAction = setSelectionAction; window.confirmSelectionAction = confirmSelectionAction; window.cancelSelection = cancelSelection;
     </script>
 </body>
 </html>
